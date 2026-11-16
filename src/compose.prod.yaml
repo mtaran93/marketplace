@@ -1,0 +1,78 @@
+# Production-style stack: sealed images, no bind mounts, no dev tooling.
+# Always run with BOTH flags (so compose.yaml / compose.override.yaml are NOT merged):
+#   docker compose -f compose.prod.yaml --env-file .env.production <command>
+name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in .env.production}
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: .docker/php/Dockerfile
+      target: prod
+    image: ${COMPOSE_PROJECT_NAME}-app:${APP_VERSION:-prod}
+    env_file: .env.production
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_signal: SIGQUIT   # php-fpm: graceful shutdown
+
+  web:
+    build:
+      context: .
+      dockerfile: .docker/nginx/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME}-web:${APP_VERSION:-prod}
+    # No published ports: nothing in this stack is reachable from outside Docker.
+    # Traffic will come from a reverse proxy (TLS) on the same network -> web:8080.
+    depends_on:
+      - app
+    healthcheck:
+      # Liveness only (/up). Dependency readiness is /api/health, not a restart signal.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/up >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  db:
+    image: postgres:18.7-alpine3.24
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:?set DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME:?set DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    ports:
+      # Server loopback ONLY - for an SSH tunnel (DataGrip: SSH tunnel to the server,
+      # host 127.0.0.1, port DB_FORWARD_PORT). The bind address is hardcoded on purpose:
+      # never make it configurable, a 0.0.0.0 here bypasses ufw/firewalld via Docker iptables.
+      - "127.0.0.1:${DB_FORWARD_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.10.3-alpine
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

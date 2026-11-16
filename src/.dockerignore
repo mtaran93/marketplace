@@ -1,0 +1,19 @@
+.git
+.idea
+.env
+.env.*
+!.env.example
+vendor
+node_modules
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+# Not needed in images (dev bind-mounts the source anyway)
+tests
+phpunit.xml
+.phpunit.cache
+compose*.yaml
+README.md
+# Generated caches are rebuilt inside the image / at container start
+bootstrap/cache/*.php

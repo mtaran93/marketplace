@@ -1,0 +1,8 @@
+# Repository-root entry point: run every `docker compose` command from here.
+# The stack itself lives in src/compose.yaml; `include` resolves its relative paths
+# (build context, bind mounts) and its .env interpolation against src/.
+# Host-only tweaks go in ./compose.override.yaml (git-ignored), auto-merged next to this file.
+name: ${COMPOSE_PROJECT_NAME:-marketplace}
+
+include:
+  - src/compose.yaml
