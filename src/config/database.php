@@ -105,7 +105,8 @@ return [
             // Sent as libpq `options='-c ...'`, so they apply from the first statement of
             // every session. Server-enforced: the query is cancelled with SQLSTATE 57014
             // (statement) or 55P03 (lock). They do NOT bound a network partition mid-query:
-            // the client then waits on the socket until nginx's fastcgi_read_timeout.
+            // the client then waits on the socket; FPM's request_terminate_timeout
+            // (.docker/php/fpm/zz-pool.conf) kills that worker.
             'server_options' => [
                 'statement_timeout' => env('DB_STATEMENT_TIMEOUT', '5s'),
                 'lock_timeout' => env('DB_LOCK_TIMEOUT', '3s'),

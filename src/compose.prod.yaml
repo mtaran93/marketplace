@@ -18,6 +18,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
     stop_signal: SIGQUIT   # php-fpm: graceful shutdown
+    cap_drop: [ALL]               # php-fpm/nginx run non-root and bind >1024: no capabilities needed
+    security_opt: ["no-new-privileges:true"]
 
   web:
     build:
@@ -36,6 +38,8 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    cap_drop: [ALL]               # php-fpm/nginx run non-root and bind >1024: no capabilities needed
+    security_opt: ["no-new-privileges:true"]
 
   db:
     image: postgres:18.7-alpine3.24

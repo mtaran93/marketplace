@@ -17,3 +17,18 @@ compose*.yaml
 README.md
 # Generated caches are rebuilt inside the image / at container start
 bootstrap/cache/*.php
+# Repo/tooling metadata and frontend build config (no Node build in the image)
+.dockerignore
+.editorconfig
+.gitattributes
+.gitignore
+.npmrc
+package.json
+vite.config.js
+.phpunit.result.cache
+# Docker build files: only what the prod stages COPY by explicit path is kept
+.docker
+!.docker/php/conf.d
+!.docker/php/fpm
+!.docker/php/entrypoint.prod.sh
+!.docker/nginx/prod.conf

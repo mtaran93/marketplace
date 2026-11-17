@@ -48,7 +48,7 @@ Laravel **13.42** was chosen because it is the current supported major and requi
 | --- | --- |
 | `pdo_pgsql` | PostgreSQL driver. |
 | `redis` (phpredis 6.3.0, PECL) | Native C client for cache/session/queue: faster than Predis and supports timeouts and retries. Predis was rejected because it adds a userland dependency with nothing to show for it here. |
-| `intl` | Locale-aware number/currency formatting and validation (prices, merchant names). |
+| `intl` | Locale-aware number/currency formatting and validation (prices, merchant names). Ships with `icu-data-full`; Alpine otherwise installs English-only ICU data and e.g. `de_DE` prices format wrongly. |
 | `bcmath` | Arbitrary-precision decimal math for money; floats are never used for prices. |
 | `opcache` | Bytecode cache. It is not enabled by default in the 8.4 image. Dev uses `validate_timestamps=1`. |
 | `pcntl` | Signal handling so `queue:work` finishes the current job on SIGTERM (Days 21–30). |
@@ -69,7 +69,8 @@ What bounds response time, and what does not:
 - Postgres connect: `DB_CONNECT_TIMEOUT=2` (seconds), passed as `PDO::ATTR_TIMEOUT` to libpq's `connect_timeout`.
 - Postgres queries: `DB_STATEMENT_TIMEOUT=5s` and `DB_LOCK_TIMEOUT=3s`, set per session through libpq `options` (`server_options` in `config/database.php`). The **server** cancels the statement (SQLSTATE `57014` / `55P03`). This applies to every query in the app, not only the health check. For a long migration, override it per run: `docker compose exec -e DB_STATEMENT_TIMEOUT=0 app php artisan migrate`.
 - Redis: `REDIS_TIMEOUT=1s` and `REDIS_READ_TIMEOUT=1s`.
-- **Known gap:** a network partition *after* a query was sent is not bounded by any of the above, because the client waits on the socket. Nginx gives up after `fastcgi_read_timeout 30s` (504), but the FPM worker stays blocked. A worker-side bound (FPM `request_terminate_timeout`) is still to do.
+- PHP-FPM worker: `request_terminate_timeout = 35s` (`.docker/php/fpm/zz-pool.conf`, dev and prod). This bounds a network partition *after* a query was sent, which none of the above can, because the client is waiting on the socket. Nginx returns 504 at `fastcgi_read_timeout 30s`, then FPM SIGTERMs the stuck worker (FPM checks periodically, so it fires a few seconds after 35s). Postgres rolls back the open transaction when the connection drops. Verified by pausing `db` during a `pg_sleep` query: 504 at 30s, then `execution timed out (38.2 sec), terminating` in the app log, and the next request returned 200.
+  Trade-off: any web request longer than 35s is killed. Long work belongs in the queue (Days 21-30), whose workers are not FPM and need their own `--timeout`.
 
 Measured results:
 
