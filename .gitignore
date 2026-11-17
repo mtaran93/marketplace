@@ -1,2 +1,5 @@
 # Host-specific Compose tweaks (see src/README.md troubleshooting).
 compose.override.yaml
+
+# JetBrains IDE project settings (per-developer)
+.idea/
